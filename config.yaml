@@ -1,0 +1,191 @@
+# Enhanced CCPO Training Configuration
+# 代码验证增强CCPO训练配置文件
+
+# 模型配置
+model:
+  name_or_path: "/data/jiacheng/dylan/aaai/Code-Consistency-Preference-Optimization/cppo/mistralai/Mistral-7B-Instruct-v0.2"  # 基础模型路径
+  revision: "main"                                      # 模型版本
+  torch_dtype: "auto"                                   # 数据类型 (auto/float16/float32)
+  use_flash_attention_2: false                          # 是否使用Flash Attention 2
+  trust_remote_code: false                              # 是否信任远程代码
+  fp16: true                                           # 是否使用16位浮点数
+
+# 数据配置
+data:
+  dataset_mixer:
+    "HuggingFaceH4/ultrafeedback_binarized": 1.0       # 数据集混合比例
+  dataset_splits: ["train_prefs", "test_prefs"]        # 数据集分割
+  preprocessing_num_workers: 4                          # 数据预处理工作进程数
+
+# 训练配置
+training:
+  output_dir: "./checkpoints/code-verified-ccpo"       # 输出目录
+  num_train_epochs: 1                                  # 训练轮数
+  per_device_train_batch_size: 2                       # 每设备训练批大小
+  per_device_eval_batch_size: 4                        # 每设备评估批大小
+  gradient_accumulation_steps: 8                       # 梯度累积步数
+  learning_rate: 5.0e-7                               # 学习率
+  max_length: 1024                                     # 最大序列长度
+  max_prompt_length: 512                               # 最大提示长度
+  beta: 0.01                                          # CCPO beta参数
+  loss_type: "code_verified"                          # 损失函数类型
+  gradient_checkpointing: true                         # 梯度检查点
+  logging_steps: 10                                   # 日志记录步数
+  save_steps: 500                                     # 模型保存步数
+  eval_steps: 500                                     # 评估步数
+  warmup_steps: 100                                   # 预热步数
+  fp16: true                                          # FP16训练
+  dataloader_num_workers: 4                           # 数据加载器工作进程数
+  remove_unused_columns: false                        # 不移除未使用的列
+  report_to: null                                     # 报告到的平台 (wandb/tensorboard/null)
+
+# 代码验证配置
+verification:
+  enable: true                                        # 启用代码验证
+  base_url: "https://8.134.217.190:17432"           # 代码执行服务器URL
+  username: "newuser"                                 # 服务器用户名
+  password: "newPass123"                              # 服务器密码
+  sample_size: 100                                   # 验证样本数量
+  timeout: 30                                        # 代码执行超时时间(秒)
+  max_retries: 0                                  # 最大重试次数
+  confidence_threshold: 0.8                          # 置信度阈值
+
+# 自我进化配置
+evolution:
+  # 数据收集
+  min_samples_per_iteration: 50                       # 每次迭代最小样本数
+  max_samples_per_iteration: 500                      # 每次迭代最大样本数
+  verification_batch_size: 5                          # 验证批大小
+  
+  # 质量阈值
+  min_execution_success_rate: 0.6                     # 最小执行成功率
+  min_accuracy_improvement: 0.01                      # 最小准确率改进
+  confidence_threshold: 0.8                           # 置信度阈值
+  
+  # 训练控制
+  training_epochs_per_iteration: 1                    # 每次迭代训练轮数
+  learning_rate_decay: 0.95                          # 学习率衰减
+  warmup_steps: 100                                  # 预热步数
+  
+  # 模型管理
+  max_model_versions: 10                             # 最大模型版本数
+  checkpoint_interval: 5                             # 检查点间隔
+  model_base_dir: "./evolution_models"               # 进化模型存储目录
+  final_output_dir: "./final_evolved_model"          # 最终模型输出目录
+  
+  # 安全设置
+  max_continuous_failures: 3                         # 最大连续失败次数
+  rollback_threshold: 0.1                           # 回滚阈值(性能下降超过10%)
+  
+  # 问题生成
+  question_generation_interval: 3                    # 问题生成间隔
+  new_questions_per_round: 10                       # 每轮新问题数量
+  
+  # 初始问题文件 (可选)
+  initial_questions_file: null                      # 初始问题文件路径
+
+# 评估配置
+evaluation:
+  test_questions_file: null                          # 测试问题文件路径
+  batch_size: 10                                    # 评估批大小
+  max_new_tokens: 512                               # 生成最大token数
+  temperature: 0.7                                  # 生成温度
+  top_p: 0.9                                       # Top-p采样参数
+  
+  # 评估指标权重
+  execution_success_weight: 0.3                     # 执行成功率权重
+  answer_accuracy_weight: 0.4                       # 答案准确率权重
+  consistency_weight: 0.3                           # 一致性权重
+
+# 日志配置
+logging:
+  level: "INFO"                                     # 日志级别
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: null                                        # 日志文件路径 (null表示控制台输出)
+
+# 硬件配置
+hardware:
+  cuda_visible_devices: "0"                         # 可见的CUDA设备
+  mixed_precision: true                             # 混合精度训练
+  gradient_checkpointing: true                      # 梯度检查点
+  dataloader_pin_memory: true                       # 数据加载器固定内存
+
+# 实验配置
+experiment:
+  name: "code_verified_ccpo_v1"                     # 实验名称
+  description: "基于代码执行验证的CCPO训练实验"        # 实验描述
+  tags: ["ccpo", "code_verification", "self_evolution"]  # 实验标签
+  
+# 高级配置
+advanced:
+  # 动态课程学习
+  curriculum_learning:
+    enable: true                                    # 启用课程学习
+    difficulty_adjustment_interval: 5               # 难度调整间隔
+    easy_threshold: 0.9                            # 简单题阈值
+    hard_threshold: 0.6                            # 困难题阈值
+  
+  # 知识蒸馏
+  knowledge_distillation:
+    enable: false                                   # 启用知识蒸馏
+    teacher_model: null                             # 教师模型路径
+    temperature: 3.0                                # 蒸馏温度
+    alpha: 0.7                                     # 蒸馏权重
+  
+  # 多任务学习
+  multitask_learning:
+    enable: false                                   # 启用多任务学习
+    task_weights:                                   # 任务权重
+      math: 0.4
+      physics: 0.3
+      logic: 0.3
+  
+  # 元学习
+  meta_learning:
+    enable: false                                   # 启用元学习
+    inner_lr: 0.01                                 # 内循环学习率
+    outer_lr: 0.001                                # 外循环学习率
+    adaptation_steps: 5                            # 适应步数
+
+# 问题类型配置
+problem_types:
+  math:
+    enabled: true
+    keywords: ["计算", "求解", "多少", "几个", "数字", "方程", "面积", "体积"]
+    patterns: ["\\d+", "计算.*的结果", "求.*的值"]
+    difficulty_levels: ["basic", "intermediate", "advanced"]
+    
+  physics:
+    enabled: true
+    keywords: ["力", "速度", "加速度", "能量", "功率", "电", "磁", "光", "声", "热"]
+    patterns: ["物体.*运动", ".*的力.*", "电路.*"]
+    difficulty_levels: ["mechanics", "electromagnetism", "thermodynamics", "quantum"]
+    
+  logic:
+    enabled: true
+    keywords: ["推理", "逻辑", "如果", "那么", "证明"]
+    patterns: ["如果.*那么.*", "证明.*", "逻辑.*"]
+    difficulty_levels: ["simple", "complex", "formal"]
+
+# 安全和限制
+safety:
+  max_execution_time: 30                            # 最大代码执行时间
+  memory_limit: "1GB"                              # 内存限制
+  forbidden_imports: ["os", "subprocess", "socket"] # 禁止的导入
+  sandbox_enabled: true                            # 启用沙箱执行
+  code_review_enabled: true                        # 启用代码审查
+
+# 性能优化
+optimization:
+  torch_compile: false                             # PyTorch编译优化
+  flash_attention: false                           # Flash Attention
+  gradient_checkpointing: true                     # 梯度检查点
+  mixed_precision: true                            # 混合精度
+  cpu_offload: false                              # CPU卸载
+  
+  # DataLoader优化
+  dataloader:
+    num_workers: 4                                 # 工作进程数
+    pin_memory: true                               # 固定内存
+    persistent_workers: true                       # 持久化工作进程
+    prefetch_factor: 2                            # 预取因子

@@ -1,0 +1,35 @@
+model_name_or_path: mistralai/Mistral-7B-Instruct-v0.2
+torch_dtype: auto
+
+dataset_mixer:
+  processed_data/iter1/train_prefs.jsonl: 1.0
+
+dataset_splits:
+- train
+preprocessing_num_workers: 4
+
+bf16: false
+fp16: true
+beta: 0.015
+do_eval: false
+eval_strategy: "no"
+gradient_accumulation_steps: 2
+gradient_checkpointing: true
+learning_rate: 2.0e-7
+logging_steps: 10
+loss_type: ccpo
+max_length: 1024
+max_prompt_length: 512
+num_train_epochs: 18
+optim: rmsprop
+output_dir: checkpoints/ccpo_final_run
+per_device_train_batch_size: 12
+save_steps: 500
+save_total_limit: 3
+seed: 42
+warmup_steps: 100
+remove_unused_columns: false
+dataloader_num_workers: 4
+report_to: null
+logging_first_step: true
+use_peft: false

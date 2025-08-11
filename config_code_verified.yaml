@@ -1,0 +1,283 @@
+# Enhanced CCPO Training Configuration - Code Verification
+# 代码验证增强CCPO训练配置文件 - 更新版
+
+# 模型配置
+model:
+  name_or_path: "/data/jiacheng/dylan/aaai/Code-Consistency-Preference-Optimization/cppo/mistralai/Mistral-7B-Instruct-v0.2"
+  revision: "main"
+  torch_dtype: "auto"
+  use_flash_attention_2: false
+  trust_remote_code: false
+  fp16: true
+
+# 数据配置 - 使用处理后的代码验证数据
+data:
+  dataset_mixer:
+    "processed_data/iter1/dataset": 1.0  # 使用代码验证处理后的数据
+  dataset_splits: ["train_prefs", "test_prefs"]
+  preprocessing_num_workers: 4
+
+# 训练配置 - 针对代码验证优化
+training:
+  output_dir: "./checkpoints/code-verified-ccpo"
+  num_train_epochs: 1
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 4
+  gradient_accumulation_steps: 8
+  learning_rate: 5.0e-7
+  max_length: 1024
+  max_prompt_length: 512
+  beta: 0.01  # 适合代码验证的beta值
+  loss_type: "code_verified"  # 使用代码验证损失
+  gradient_checkpointing: true
+  logging_steps: 10
+  save_steps: 500
+  eval_steps: 500
+  warmup_steps: 100
+  fp16: true
+  dataloader_num_workers: 4
+  remove_unused_columns: false
+  report_to: null
+
+# 代码验证配置 - 核心功能
+verification:
+  enable: true
+  base_url: "https://8.134.217.190:17432"
+  username: "newuser"
+  password: "newPass123"
+  sample_size: 100
+  timeout: 30
+  max_retries: 0
+  confidence_threshold: 0.8
+  batch_size: 5  # 验证批大小
+  use_cache: true  # 启用验证缓存
+  
+  # 代码验证质量控制
+  quality_control:
+    min_execution_success_rate: 0.6
+    min_answer_accuracy_rate: 0.4
+    max_execution_time: 60
+    retry_on_failure: true
+    
+  # 验证分数权重配置
+  scoring:
+    confidence_weight: 0.8      # 置信度权重
+    verification_bonus: 0.2     # 验证通过奖励
+    execution_success_bonus: 0.1 # 执行成功奖励
+    time_penalty_threshold: 30   # 时间惩罚阈值(秒)
+    time_penalty_factor: 0.9     # 时间惩罚因子
+
+# 自我进化配置 - 增强版
+evolution:
+  # 数据收集策略
+  min_samples_per_iteration: 100
+  max_samples_per_iteration: 1000
+  verification_batch_size: 5
+  sample_quality_threshold: 0.7
+  
+  # 质量阈值 - 针对代码验证调整
+  min_execution_success_rate: 0.6
+  min_accuracy_improvement: 0.02
+  confidence_threshold: 0.8
+  score_difference_threshold: 0.1
+  
+  # 训练控制
+  training_epochs_per_iteration: 1
+  learning_rate_decay: 0.95
+  warmup_steps: 100
+  early_stopping_patience: 3
+  
+  # 模型管理
+  max_model_versions: 10
+  checkpoint_interval: 2
+  model_base_dir: "./evolution_models"
+  final_output_dir: "./final_evolved_model"
+  
+  # 安全设置
+  max_continuous_failures: 3
+  rollback_threshold: 0.15
+  performance_monitor_interval: 50
+  
+  # 动态问题生成
+  question_generation:
+    enable: true
+    interval: 3
+    new_questions_per_round: 20
+    difficulty_progression: true
+    topic_diversity: true
+    
+  # 课程学习
+  curriculum_learning:
+    enable: true
+    start_difficulty: 0.3
+    max_difficulty: 0.9
+    difficulty_increase_rate: 0.1
+
+# 评估配置 - 代码验证专用
+evaluation:
+  test_questions_file: null
+  batch_size: 10
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+  
+  # 评估指标权重 - 针对代码任务
+  metrics:
+    execution_success_weight: 0.3
+    answer_accuracy_weight: 0.4
+    consistency_weight: 0.2
+    efficiency_weight: 0.1  # 执行效率权重
+  
+  # 代码特定评估
+  code_evaluation:
+    syntax_check: true
+    runtime_analysis: true
+    output_validation: true
+    performance_profiling: false
+
+# 问题类型配置 - 扩展的代码验证任务
+problem_types:
+  math:
+    enabled: true
+    weight: 0.4
+    keywords: ["计算", "求解", "多少", "几个", "数字", "方程", "面积", "体积", "阶乘"]
+    patterns: ["\\d+", "计算.*的结果", "求.*的值", ".*中有几个.*"]
+    difficulty_levels: ["basic", "intermediate", "advanced"]
+    code_templates: ["arithmetic", "geometry", "algebra"]
+    
+  string_analysis:
+    enabled: true
+    weight: 0.3
+    keywords: ["字符", "字母", "单词", "字符串", "文本", "计数"]
+    patterns: [".*中有几个.*", ".*的长度", ".*包含.*"]
+    difficulty_levels: ["simple", "complex"]
+    code_templates: ["string_processing", "text_analysis"]
+    
+  logic:
+    enabled: true
+    weight: 0.2
+    keywords: ["推理", "逻辑", "如果", "那么", "证明", "判断"]
+    patterns: ["如果.*那么.*", "证明.*", "判断.*"]
+    difficulty_levels: ["simple", "complex", "formal"]
+    code_templates: ["conditional_logic", "boolean_operations"]
+    
+  data_processing:
+    enabled: true
+    weight: 0.1
+    keywords: ["列表", "数组", "排序", "搜索", "统计"]
+    patterns: [".*的和", ".*的平均值", ".*的最大值", ".*的最小值"]
+    difficulty_levels: ["basic", "intermediate"]
+    code_templates: ["list_operations", "statistical_analysis"]
+
+# 日志和监控配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/code_verified_ccpo.log"
+  
+  # 专门的验证日志
+  verification_log: "logs/verification_details.log"
+  training_metrics_log: "logs/training_metrics.log"
+  
+  # 详细日志选项
+  log_verification_details: true
+  log_training_progress: true
+  log_model_performance: true
+
+# 硬件优化配置
+hardware:
+  cuda_visible_devices: "0"
+  mixed_precision: true
+  gradient_checkpointing: true
+  dataloader_pin_memory: true
+  
+  # 内存优化
+  memory_optimization:
+    gradient_accumulation_steps: 8
+    max_memory_usage: "90%"
+    cache_size_limit: "2GB"
+    cleanup_interval: 100
+
+# 实验跟踪配置
+experiment:
+  name: "code_verified_ccpo_v2"
+  description: "基于代码执行验证的增强CCPO训练实验 - 第二版"
+  tags: ["ccpo", "code_verification", "self_evolution", "v2"]
+  
+  # 实验版本控制
+  version: "2.0"
+  base_experiment: "ccpo_v1"
+  
+  # 跟踪的指标
+  tracked_metrics:
+    - "execution_success_rate"
+    - "answer_accuracy_rate"
+    - "verification_confidence"
+    - "training_loss"
+    - "reward_margin"
+
+# 高级特性配置
+advanced:
+  # 多任务学习
+  multitask_learning:
+    enable: false
+    task_weights:
+      math: 0.4
+      string_analysis: 0.3
+      logic: 0.2
+      data_processing: 0.1
+  
+  # 主动学习
+  active_learning:
+    enable: true
+    uncertainty_sampling: true
+    diversity_sampling: true
+    sample_selection_strategy: "uncertainty_diversity"
+    
+  # 元学习支持
+  meta_learning:
+    enable: false
+    few_shot_adaptation: true
+    task_adaptation_steps: 5
+    
+  # 知识蒸馏
+  knowledge_distillation:
+    enable: false
+    teacher_model: null
+    temperature: 3.0
+    alpha: 0.7
+
+# 安全和限制 - 代码执行安全
+safety:
+  max_execution_time: 60
+  memory_limit: "2GB"
+  forbidden_imports: ["os", "subprocess", "socket", "requests", "urllib"]
+  sandbox_enabled: true
+  code_review_enabled: true
+  
+  # 代码安全检查
+  security_checks:
+    syntax_validation: true
+    import_whitelist: ["math", "random", "string", "re", "json", "datetime"]
+    function_blacklist: ["exec", "eval", "__import__", "open", "file"]
+    dangerous_patterns: ["rm -rf", "del ", "import os", "subprocess"]
+
+# 性能基准配置
+benchmarks:
+  # 标准测试集
+  standard_tests:
+    math_basic: 100
+    string_processing: 50
+    logic_reasoning: 30
+    
+  # 性能目标
+  performance_targets:
+    execution_success_rate: 0.85
+    answer_accuracy_rate: 0.80
+    average_confidence: 0.75
+    
+  # 回归测试
+  regression_tests:
+    enable: true
+    baseline_model: null
+    performance_threshold: 0.95

@@ -1,0 +1,28 @@
+{
+  "description": "CCPO Code-Verified Preference Dataset",
+  "format": "conversation",
+  "train_size": 161,
+  "test_size": 18,
+  "features": {
+    "chosen": "conversation list",
+    "rejected": "conversation list",
+    "chosen_probs": "float",
+    "chosen_probs_win": "float",
+    "chosen_probs_lose": "float",
+    "chosen_score": "float",
+    "rejected_score": "float",
+    "score_difference": "float"
+  },
+  "splits": {
+    "train": "train_prefs.jsonl",
+    "test": "test_prefs.jsonl"
+  },
+  "formats": [
+    "jsonl",
+    "parquet"
+  ],
+  "usage": {
+    "jsonl": "Direct loading with datasets.load_dataset('json', data_files='path')",
+    "parquet": "Loading with datasets.load_dataset('parquet', data_files='path')"
+  }
+}

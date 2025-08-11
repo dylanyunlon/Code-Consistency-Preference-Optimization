@@ -1,0 +1,69 @@
+# Model arguments
+model_name_or_path: mistralai/Mistral-7B-Instruct-v0.2
+torch_dtype: auto
+
+# Data training arguments with CCPO verification
+dataset_mixer:
+  processed_data/iter1/dataset/train_prefs: 1.0
+
+dataset_splits:
+- train
+preprocessing_num_workers: 4
+
+# Code Verification Settings
+enable_code_verification: true
+verification_base_url: "https://8.134.217.190:17432"
+verification_username: "newuser"
+verification_password: "newPass123"
+verification_sample_size: 100
+
+# CCPOTrainer arguments with CCPO enhancements
+bf16: false
+fp16: true
+beta: 0.015
+do_eval: false
+evaluation_strategy: "no"
+eval_steps: 500
+gradient_accumulation_steps: 2
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+hub_model_id: mistral-7b-instruct-ccpo-ccpo
+learning_rate: 2.0e-7
+log_level: info
+logging_steps: 10
+loss_type: code_verified
+lr_scheduler_type: linear
+max_length: 1024
+max_prompt_length: 512
+num_train_epochs: 18
+optim: rmsprop
+output_dir: checkpoints/ccpo/iter1_2.0e-7_beta0.015_rmsprop/code_verified_ccpo_score_18
+per_device_train_batch_size: 12
+per_device_eval_batch_size: 4
+push_to_hub: false
+save_strategy: "steps"
+save_steps: 500
+save_total_limit: 3
+seed: 42
+warmup_steps: 100
+weight_decay: 0.01
+remove_unused_columns: false
+dataloader_num_workers: 4
+
+# Enhanced logging
+report_to: null
+logging_first_step: true
+logging_nan_inf_filter: true
+greater_is_better: false
+metric_for_best_model: "train_loss"
+load_best_model_at_end: false
+
+# PEFT configuration (disabled for full fine-tuning)
+use_peft: false
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.1
+
+# CCPO specific settings
+generate_during_eval: false

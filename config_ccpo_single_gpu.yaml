@@ -1,0 +1,39 @@
+model_name_or_path: mistralai/Mistral-7B-Instruct-v0.2
+torch_dtype: auto
+
+# 使用处理后的JSONL文件
+dataset_mixer:
+  "/data/jiacheng/dylan/iclr2026/Code-Consistency-Preference-Optimization/processed_data/iter1/train_prefs.jsonl": 1.0
+
+dataset_splits:
+- train
+
+preprocessing_num_workers: 4
+
+# 单GPU优化配置
+bf16: true
+fp16: false
+do_eval: false
+eval_strategy: "no"
+gradient_accumulation_steps: 8  # 增加梯度累积以补偿小batch size
+gradient_checkpointing: true
+learning_rate: 2.0e-7
+logging_steps: 10
+loss_type: ccpo
+max_length: 512  # 进一步减少序列长度
+max_prompt_length: 256  # 进一步减少prompt长度
+num_train_epochs: 18
+optim: rmsprop
+output_dir: checkpoints/ccpo/iter1_2.0e-7_beta0.015_rmsprop/single_gpu_test
+per_device_train_batch_size: 2  # 小batch size适合单GPU
+save_steps: 500
+save_total_limit: 3
+seed: 42
+warmup_steps: 100
+remove_unused_columns: false
+dataloader_num_workers: 2
+report_to: null
+logging_first_step: true
+use_peft: false
+beta: 0.015
+dataloader_pin_memory: false
