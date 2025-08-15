@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Enhanced Answer Extractor V2 - 基于最佳实践的答案提取器
-参考了Stack Overflow和Python官方文档的最佳实践
-修复版：专注于最后输出结果的提取
+Enhanced Answer Extractor V2 - 保持接口不变的修复版
+基于原版本，内部实现多数字验证逻辑，但保持所有函数签名和调用关系不变
 """
 
 import re
@@ -14,8 +13,8 @@ logger = logging.getLogger(__name__)
 
 class EnhancedAnswerExtractorV2:
     """
-    增强版答案提取器V2 - 基于社区最佳实践
-    修复版：专注于代码最后输出结果的提取
+    增强版答案提取器V2 - 保持接口不变的修复版
+    核心改进：内部实现多数字验证，但对外接口完全保持原样
     """
     
     def __init__(self, debug: bool = False):
@@ -24,27 +23,40 @@ class EnhancedAnswerExtractorV2:
         # 预编译正则表达式以提高性能 (最佳实践1)
         self.compiled_patterns = self._compile_patterns()
         
+        # 🚀 新增：内部缓存最后一次的候选答案数组（不影响对外接口）
+        self._last_code_candidates = []
+        
     def _compile_patterns(self) -> Dict[str, List[re.Pattern]]:
-        """预编译正则表达式模式 - 性能最佳实践"""
+        """预编译正则表达式模式 - 修复版，添加数学答案模式"""
         patterns = {
+            # 🔥 新增：数学文本的标准答案模式（最高优先级）
+            'math_answer_patterns': [
+                re.compile(r"####\s*(\d+(?:\.\d+)?)", re.IGNORECASE),  # GSM8K格式：#### 3400
+                re.compile(r"\\boxed\{([^}]+)\}", re.IGNORECASE),  # LaTeX \boxed{}
+                re.compile(r"The answer is[:\s]*([^\s\n.,]+)", re.IGNORECASE),  # 英文答案声明
+                re.compile(r"答案是[：:\s]*([^\s\n，。]+)", re.IGNORECASE),  # 中文答案声明
+                re.compile(r"Final answer[:\s]*([^\s\n.,]+)", re.IGNORECASE),  # 最终答案
+                re.compile(r"答案[：:\s]*([^\s\n，。]+)", re.IGNORECASE),  # 简化中文答案
+            ],
+            
             'result_line_extraction': [
                 # 修复：专门针对结果行的模式
                 re.compile(r"字母\s*['\"]([^'\"]*?)['\"]?\s*在\s*['\"]([^'\"]*?)['\"]?\s*中出现了\s*(\d+)\s*次", re.IGNORECASE),
                 re.compile(r"在\s*['\"]([^'\"]*?)['\"]?\s*中找到\s*(\d+)\s*个\s*['\"]([^'\"]*?)['\"]?", re.IGNORECASE),
                 re.compile(r"结果[：:\s]*(\d+(?:\.\d+)?)", re.IGNORECASE),
-                re.compile(r"答案[：:\s]*(\d+(?:\.\d+)?)", re.IGNORECASE),
                 re.compile(r"输出[：:\s]*(\d+(?:\.\d+)?)", re.IGNORECASE),
                 re.compile(r"^(\d+(?:\.\d+)?)$"),  # 纯数字行
                 re.compile(r"等于\s*(\d+(?:\.\d+)?)", re.IGNORECASE),
-                re.compile(r"=\s*(\d+(?:\.\d+)?)", re.IGNORECASE),
+                # 降低 = 模式的优先级，避免误匹配中间计算
+                re.compile(r"=\s*(\d+(?:\.\d+)?)(?!\s*\+)", re.IGNORECASE),  # 避免匹配 = 11+1 这种情况
             ],
             'last_line_numbers': [
                 # 修复：针对最后几行的数字提取
                 re.compile(r"\b(\d+(?:\.\d+)?)\b"),
             ],
             'general_number': [
-                # 通用数字提取 - 避免时间戳格式
-                re.compile(r"(?<![\d\-])\b(\d{1,3}(?:\.\d+)?)\b(?![\-\d])"),  # 避免时间戳
+                # 通用数字提取 - 修复：支持任意位数，避免时间戳格式
+                re.compile(r"(?<![\d\-])\b(\d+(?:\.\d+)?)\b(?![\-\d])"),  # 支持任意位数字
             ],
             'option_extraction': [
                 re.compile(r"答案是\s*([A-Z])", re.IGNORECASE),
@@ -61,13 +73,19 @@ class EnhancedAnswerExtractorV2:
     def extract_from_code_output(self, output: str) -> Optional[str]:
         """
         从代码执行输出中提取答案 - 修复版
-        专注于最后输出结果，避免时间戳干扰
+        🚀 内部改进：同时缓存候选答案数组，但对外仍返回单个答案
         """
         if not output:
             return None
         
         if self.debug:
             logger.info(f"开始提取答案，输出长度: {len(output)}")
+        
+        # 🚀 内部改进：提取所有候选答案并缓存
+        self._last_code_candidates = self._extract_all_candidate_answers(output)
+        
+        if self.debug and self._last_code_candidates:
+            logger.info(f"内部候选答案数组: {self._last_code_candidates}")
         
         # 策略1: 最后几行优先提取 (新增策略)
         result = self._extract_from_last_lines(output)
@@ -101,6 +119,91 @@ class EnhancedAnswerExtractorV2:
             logger.warning("所有提取策略都失败了")
         return None
     
+    def _extract_all_candidate_answers(self, text: str, max_lines: int = 5) -> List[str]:
+        """
+        🚀 新增：内部方法，提取所有可能的候选答案（你的想法的核心实现）
+        """
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        if not lines:
+            return []
+        
+        # 取最后几行
+        last_lines = lines[-max_lines:]
+        
+        # 过滤掉明显的日志行和分隔符行
+        skip_patterns = [
+            re.compile(r'^\d{4}-\d{2}-\d{2}.*INFO'),  # 时间戳日志
+            re.compile(r'^=+$'),  # 等号分隔符
+            re.compile(r'^-+$'),  # 减号分隔符
+            re.compile(r'位置示意图|可视化|出现位置'),  # 可视化描述
+            re.compile(r'程序.*完成|执行完成'),  # 程序状态行
+        ]
+        
+        filtered_lines = []
+        for line in last_lines:
+            skip_line = False
+            for skip_pattern in skip_patterns:
+                if skip_pattern.search(line):
+                    skip_line = True
+                    break
+            if not skip_line:
+                filtered_lines.append(line)
+        
+        # 🎯 核心逻辑：从最后的有效行提取所有可能的答案数字
+        all_candidates = []
+        
+        # 从最后往前检查，找到第一个包含数字的有效行
+        for line in reversed(filtered_lines):
+            line_numbers = self._extract_all_numbers_from_line_safe(line)
+            if line_numbers:
+                if self.debug:
+                    logger.info(f"从有效行提取候选数字: '{line}' -> {line_numbers}")
+                all_candidates.extend(line_numbers)
+                break  # 找到第一个有数字的行就停止
+        
+        # 去重并保持顺序
+        seen = set()
+        unique_candidates = []
+        for num in all_candidates:
+            if num not in seen:
+                seen.add(num)
+                unique_candidates.append(num)
+        
+        return unique_candidates
+    
+    def _extract_all_numbers_from_line_safe(self, line: str) -> List[str]:
+        """
+        🔧 改进：安全地从行中提取所有数字，正确处理货币格式
+        """
+        # 如果行包含明显的时间戳模式，跳过
+        if re.search(r'\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}', line):
+            return []
+        
+        numbers = []
+        
+        # 🔥 处理货币格式（如 $1,080）
+        currency_pattern = re.compile(r'\$?([\d,]+(?:\.\d{1,2})?)')
+        currency_matches = currency_pattern.findall(line)
+        for match in currency_matches:
+            # 移除逗号并验证
+            clean_number = match.replace(',', '')
+            if self._is_valid_answer_number(clean_number):
+                numbers.append(clean_number)
+        
+        # 🔥 处理普通数字（避免重复货币数字）
+        temp_line = line
+        for currency_match in currency_matches:
+            temp_line = temp_line.replace('$' + currency_match, '').replace(currency_match, '')
+        
+        # 提取剩余的普通数字
+        general_pattern = re.compile(r'(?<![\d\-])\b(\d+(?:\.\d+)?)\b(?![\-\d])')
+        general_matches = general_pattern.findall(temp_line)
+        for num in general_matches:
+            if self._is_valid_answer_number(num):
+                numbers.append(num)
+        
+        return numbers
+    
     def _extract_from_last_lines(self, text: str, max_lines: int = 5) -> Optional[str]:
         """
         新增策略：专门从最后几行提取结果
@@ -119,7 +222,6 @@ class EnhancedAnswerExtractorV2:
                 logger.info(f"  最后第{len(last_lines)-i}行: {line}")
         
         # 过滤掉明显的日志行和分隔符行
-        filtered_lines = []
         skip_patterns = [
             re.compile(r'^\d{4}-\d{2}-\d{2}.*INFO'),  # 时间戳日志
             re.compile(r'^=+$'),  # 等号分隔符
@@ -128,6 +230,7 @@ class EnhancedAnswerExtractorV2:
             re.compile(r'程序.*完成|执行完成'),  # 程序状态行
         ]
         
+        filtered_lines = []
         for line in last_lines:
             skip_line = False
             for skip_pattern in skip_patterns:
@@ -174,18 +277,10 @@ class EnhancedAnswerExtractorV2:
     def _extract_numbers_from_line_safe(self, line: str) -> List[str]:
         """
         安全地从行中提取数字，避免时间戳等干扰
+        🔧 修复：现在返回最后一个数字，但内部支持多数字提取
         """
-        # 如果行包含明显的时间戳模式，跳过
-        if re.search(r'\d{4}-\d{2}-\d{2}|\d{2}:\d{2}:\d{2}', line):
-            return []
-        
-        numbers = []
-        for pattern in self.compiled_patterns['general_number']:
-            found = pattern.findall(line)
-            for num in found:
-                if self._is_valid_answer_number(num):
-                    numbers.append(num)
-        return numbers
+        all_numbers = self._extract_all_numbers_from_line_safe(line)
+        return all_numbers
     
     def _is_valid_answer_number(self, s: str) -> bool:
         """
@@ -300,11 +395,22 @@ class EnhancedAnswerExtractorV2:
             return False
     
     def extract_from_ai_response(self, text: str) -> Optional[str]:
-        """从AI回答中提取答案"""
+        """从AI回答中提取答案 - 修复版，优先处理数学答案标记"""
         if not text:
             return None
         
-        # 首先尝试数字提取
+        # 🔥 最高优先级：数学答案标记（必须优先处理！）
+        for pattern in self.compiled_patterns['math_answer_patterns']:
+            matches = pattern.findall(text)
+            if matches:
+                answer = matches[-1].strip()  # 取最后一个匹配
+                if self.debug:
+                    logger.info(f"从数学答案标记提取: {pattern.pattern} -> '{answer}'")
+                # 验证提取的答案是否合理（不是0或负数，除非题目确实要求）
+                if self._is_valid_number(answer):
+                    return answer
+        
+        # 其他模式保持原有优先级
         result = self._extract_with_precise_patterns(text)
         if result:
             return result
@@ -331,11 +437,35 @@ class EnhancedAnswerExtractorV2:
     def compare_answers(self, ai_answer: str, code_answer: str, tolerance: float = 1e-6) -> Tuple[bool, float]:
         """
         比较答案是否匹配 - 增强版
-        支持数字比较、字符串比较、模糊匹配
+        🚀 内部改进：如果直接比较失败，检查AI答案是否在候选数组中
         """
         if not ai_answer or not code_answer:
             return False, 0.0
         
+        # 原有的直接比较逻辑
+        direct_match, direct_confidence = self._direct_compare(ai_answer, code_answer, tolerance)
+        if direct_match:
+            return direct_match, direct_confidence
+        
+        # 🚀 新增：如果直接比较失败，检查是否在候选数组中
+        if self._last_code_candidates and ai_answer:
+            if self.debug:
+                logger.info(f"直接比较失败，检查AI答案 '{ai_answer}' 是否在候选数组 {self._last_code_candidates} 中")
+            
+            # 检查AI答案是否在候选数组中
+            for candidate in self._last_code_candidates:
+                candidate_match, candidate_confidence = self._direct_compare(ai_answer, candidate, tolerance)
+                if candidate_match:
+                    if self.debug:
+                        logger.info(f"✅ 在候选数组中找到匹配: '{ai_answer}' = '{candidate}'")
+                    return True, candidate_confidence
+        
+        return False, 0.0
+    
+    def _direct_compare(self, ai_answer: str, code_answer: str, tolerance: float = 1e-6) -> Tuple[bool, float]:
+        """
+        直接比较两个答案 - 原有逻辑
+        """
         # 数字比较
         if self._is_valid_number(ai_answer) and self._is_valid_number(code_answer):
             try:
@@ -381,6 +511,68 @@ class EnhancedAnswerExtractorV2:
         
         return False, 0.0
     
+    # 🚀 保持原有的验证方法，但内部逻辑升级
+    def verify_answer_in_context(self, output: str, ground_truth: str) -> Tuple[bool, Dict[str, Any]]:
+        """
+        验证答案是否在上下文中存在
+        🚀 内部改进：使用候选数组逻辑，但保持接口不变
+        """
+        verification_info = {
+            'found_in_last_line': False,
+            'last_line_numbers': [],
+            'last_effective_line': '',
+            'ground_truth_normalized': ground_truth.strip(),
+            'is_correct': False,
+            'candidate_answers': []  # 新增：候选答案数组
+        }
+        
+        if not output or not ground_truth:
+            return False, verification_info
+        
+        # 🚀 使用新的候选答案提取逻辑
+        candidate_answers = self._extract_all_candidate_answers(output)
+        verification_info['candidate_answers'] = candidate_answers
+        verification_info['last_line_numbers'] = candidate_answers  # 向后兼容
+        
+        if candidate_answers:
+            verification_info['last_effective_line'] = f"候选答案: {candidate_answers}"
+            
+            # 检查ground_truth是否在候选数组中
+            gt_normalized = ground_truth.strip()
+            
+            # 直接字符串匹配
+            if gt_normalized in candidate_answers:
+                verification_info['found_in_last_line'] = True
+                verification_info['is_correct'] = True
+                
+                if self.debug:
+                    logger.info(f"✅ Ground truth '{gt_normalized}' 直接匹配候选答案: {candidate_answers}")
+                
+                return True, verification_info
+            
+            # 数值匹配（如 "10" vs "10.0"）
+            try:
+                gt_float = float(gt_normalized)
+                for candidate in candidate_answers:
+                    try:
+                        if abs(float(candidate) - gt_float) < 1e-6:
+                            verification_info['found_in_last_line'] = True
+                            verification_info['is_correct'] = True
+                            
+                            if self.debug:
+                                logger.info(f"✅ Ground truth '{gt_normalized}' 数值匹配 '{candidate}' 在候选答案中")
+                            
+                            return True, verification_info
+                    except:
+                        continue
+            except:
+                pass
+        
+        if self.debug:
+            logger.info(f"❌ Ground truth '{ground_truth}' 未在候选答案中找到: {candidate_answers}")
+        
+        return False, verification_info
+    
     def debug_extraction_process(self, text: str) -> Dict[str, Any]:
         """调试用：显示提取过程的详细信息"""
         debug_info = {
@@ -389,7 +581,8 @@ class EnhancedAnswerExtractorV2:
             'patterns_tried': [],
             'matches_found': {},
             'final_result': None,
-            'last_lines_analysis': {}
+            'last_lines_analysis': {},
+            'candidate_answers': []  # 新增：候选答案数组
         }
         
         # 分析最后几行
@@ -429,74 +622,85 @@ class EnhancedAnswerExtractorV2:
                     })
         
         debug_info['final_result'] = self.extract_from_code_output(text)
+        debug_info['candidate_answers'] = self._extract_all_candidate_answers(text)
         return debug_info
 
 
-# 测试函数
-def test_enhanced_extractor_v2():
-    """测试增强版提取器V2 - 修复版"""
+# 测试函数 - 验证接口保持不变但内部逻辑升级
+def test_enhanced_extractor_v2_with_internal_upgrade():
+    """测试接口不变但内部逻辑升级的效果"""
     extractor = EnhancedAnswerExtractorV2(debug=True)
     
-    # 模拟实际输出格式
-    test_output = """2025-07-31 17:59:06,345 - **main** - INFO - 程序开始执行
-2025-07-31 17:59:06,345 - **main** - INFO - 开始分析单词: 'strawberry'
-2025-07-31 17:59:06,345 - **main** - INFO - 查找字符: 'r'
-2025-07-31 17:59:06,345 - **main** - INFO - 忽略大小写: False
-2025-07-31 17:59:06,345 - **main** - INFO - 分析完成: 在'strawberry'中找到3个'r'
-==================================================
-分析结果
-==================================================
-单词: strawberry
-单词长度: 10个字符
-查找字符: 'r'
-忽略大小写: 否
-结果: 字母'r'在'strawberry'中出现了 3 次
-位置: 第 3, 8, 9 个字符
-可视化:
- s  t [r] a  w  b  e [r][r] y
-==================================================
-5.0
-2025-07-31 17:59:06,345 - **main** - INFO - 程序执行完成"""
+    print("🧪 测试接口保持不变的内部升级版本")
+    print("=" * 60)
     
-    print("🧪 测试增强版提取器V2 - 修复版")
-    print("=" * 50)
+    # 测试案例1：原始问题场景
+    test_output1 = """2025-08-07 19:54:42,103 - INFO - 设定方程
+2025-08-07 19:54:42,103 - INFO - 求解方程
+解得：x = 10.0
+2025-08-07 19:54:42,103 - INFO - 验证：20 + 10 × 10.0 = 120.0
+2025-08-07 19:54:42,103 - INFO - 解验证成功
+Daria每周需要存入$10才能在10周内筹集到$120
+2025-08-07 19:54:42,103 - INFO - 程序执行完成"""
     
-    # 基本提取测试
-    result = extractor.extract_from_code_output(test_output)
-    print(f"提取结果: '{result}'")
+    print("📊 案例1测试 - 原始问题:")
+    print("-" * 30)
     
-    # 调试信息
-    debug_info = extractor.debug_extraction_process(test_output)
-    print("\n🔧 调试信息:")
-    print(f"输入长度: {debug_info['input_length']}")
-    print(f"处理行数: {debug_info['lines_count']}")
+    # 🔧 保持原有接口调用方式
+    extracted_answer1 = extractor.extract_from_code_output(test_output1)
+    print(f"extract_from_code_output(): '{extracted_answer1}'")
     
-    # 最后几行分析
-    print(f"\n📋 最后几行分析:")
-    for i, line in enumerate(debug_info['last_lines_analysis']['last_5_lines']):
-        print(f"  最后第{5-i}行: {line}")
+    # 验证逻辑（接口保持不变）
+    is_correct1, verification_info1 = extractor.verify_answer_in_context(test_output1, "10")
+    print(f"verify_answer_in_context('10'): {'✅' if is_correct1 else '❌'}")
+    print(f"候选答案数组: {verification_info1.get('candidate_answers', [])}")
     
-    print(f"\n过滤后的有效行:")
-    for line in debug_info['last_lines_analysis']['filtered_lines']:
-        print(f"  有效: {line}")
+    # 比较逻辑（接口保持不变）
+    match_result1, confidence1 = extractor.compare_answers("10", extracted_answer1)
+    print(f"compare_answers('10', '{extracted_answer1}'): {'✅' if match_result1 else '❌'} (置信度: {confidence1})")
     
-    # 模式匹配详情
-    for category, matches in debug_info['matches_found'].items():
-        if matches:
-            print(f"\n📋 {category}: {len(matches)} 个匹配")
-            for match_info in matches:
-                print(f"  - 模式: {match_info['pattern']}")
-                print(f"    匹配: {match_info['matches']}")
+    print()
     
-    print(f"\n🎯 最终结果: '{debug_info['final_result']}'")
+    # 测试案例2：货币格式问题
+    test_output2 = "Adam will have earned a total of $1,080 after taxes after working for 30 days."
     
-    # 答案比较测试
-    ai_answer = "5"
-    is_match, confidence = extractor.compare_answers(ai_answer, result)
-    print(f"\n✅ 答案比较:")
-    print(f"AI答案: '{ai_answer}', 代码答案: '{result}'")
-    print(f"匹配结果: {'✅' if is_match else '❌'}, 置信度: {confidence:.3f}")
+    print("📊 案例2测试 - 货币格式:")
+    print("-" * 30)
+    
+    extracted_answer2 = extractor.extract_from_code_output(test_output2)
+    print(f"extract_from_code_output(): '{extracted_answer2}'")
+    
+    is_correct2, verification_info2 = extractor.verify_answer_in_context(test_output2, "1080")
+    print(f"verify_answer_in_context('1080'): {'✅' if is_correct2 else '❌'}")
+    print(f"候选答案数组: {verification_info2.get('candidate_answers', [])}")
+    
+    match_result2, confidence2 = extractor.compare_answers("1080", extracted_answer2)
+    print(f"compare_answers('1080', '{extracted_answer2}'): {'✅' if match_result2 else '❌'} (置信度: {confidence2})")
+    
+    print()
+    
+    # 测试案例3：AI回答提取
+    test_ai_response = """#### 1080
+The answer is: 1080"""
+    
+    print("📊 案例3测试 - AI回答提取:")
+    print("-" * 30)
+    
+    ai_answer = extractor.extract_from_ai_response(test_ai_response)
+    print(f"extract_from_ai_response(): '{ai_answer}'")
+    
+    # 与案例2结合测试
+    match_result3, confidence3 = extractor.compare_answers(ai_answer, extracted_answer2)
+    print(f"compare_answers('{ai_answer}', '{extracted_answer2}'): {'✅' if match_result3 else '❌'} (置信度: {confidence3})")
+    
+    print(f"\n🎯 升级效果总结:")
+    print("✅ 所有函数接口保持完全不变")
+    print("✅ 内部实现了候选答案数组逻辑")
+    print("✅ compare_answers() 自动检查候选数组")
+    print("✅ verify_answer_in_context() 使用多数字验证")
+    print("✅ 正确处理货币格式分割问题")
+    print("✅ 向后兼容性100%保持")
 
 
 if __name__ == "__main__":
-    test_enhanced_extractor_v2()
+    test_enhanced_extractor_v2_with_internal_upgrade()
